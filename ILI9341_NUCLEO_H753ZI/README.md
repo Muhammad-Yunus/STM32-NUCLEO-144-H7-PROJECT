@@ -3,7 +3,7 @@
 
 ## Overview
 This project demonstrates running LVGL v9 on an STM32 Nucleo 144 H753ZI microcontroller with a Seeedstudio LCD Shield V2 (ILI9341 SPI display).<br>
-![](doc/thumb-lvgl.jpeg)
+![LVGL Demo](../Doc/thumb-lvgl.jpeg)
 
 ## Prerequisites
 - STM32CubeIDE installed
