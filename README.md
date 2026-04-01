@@ -1,6 +1,6 @@
 ## Description
 
-![Thumbnail](doc/thumb-lvgl.jpeg)<br>
+![Thumbnail](Doc/thumb-lvgl.jpeg)<br>
 This repository contains an example project for the STM32 Nucleo-144 H7 microcontroller board, specifically targeting boards like the STM32 Nucleo H753ZI. The project demonstrates best practices using:
 
 - **STM32CubeIDE** - Integrated development environment
