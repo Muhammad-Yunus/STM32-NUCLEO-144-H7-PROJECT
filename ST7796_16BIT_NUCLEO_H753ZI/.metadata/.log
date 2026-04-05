@@ -1,0 +1,23 @@
+!SESSION 2026-04-04 08:32:39.772 -----------------------------------------------
+eclipse.buildId=Version 2.0.0
+java.version=21.0.8
+java.vendor=Eclipse Adoptium
+BootLoader constants: OS=win32, ARCH=x86_64, WS=win32, NL=en_ID
+Framework arguments:  -application com.st.stm32cube.ide.cdt.buildmanager.buildConfig -buildConfig C:\D\MY\DEV\STM32CubeIDE\workspace_1.18.1\ILI9486_16BIT_NUCLEO_H753ZI\.cproject Debug
+Command-line arguments:  -os win32 -ws win32 -arch x86_64 -application com.st.stm32cube.ide.cdt.buildmanager.buildConfig -data C:\D\MY\DEV\STM32CubeIDE\workspace_1.18.1\ILI9486_16BIT_NUCLEO_H753ZI -consoleLog -buildConfig C:\D\MY\DEV\STM32CubeIDE\workspace_1.18.1\ILI9486_16BIT_NUCLEO_H753ZI\.cproject Debug
+
+!ENTRY org.eclipse.osgi 4 0 2026-04-04 08:32:41.881
+!MESSAGE Application error
+!STACK 1
+java.lang.RuntimeException: Application "com.st.stm32cube.ide.cdt.buildmanager.buildConfig" could not be found in the registry. The applications available are: org.eclipse.ant.core.antRunner, org.eclipse.cdt.codan.core.application, org.eclipse.cdt.core.GeneratePDOM, org.eclipse.cdt.core.CodeFormatter, org.eclipse.cdt.managedbuilder.core.headlessbuild, org.eclipse.e4.ui.workbench.swt.E4Application, org.eclipse.e4.ui.workbench.swt.GenTopic, org.eclipse.equinox.app.error, org.eclipse.equinox.p2.director, org.eclipse.equinox.p2.garbagecollector.application, org.eclipse.equinox.p2.publisher.InstallPublisher, org.eclipse.equinox.p2.publisher.EclipseGenerator, org.eclipse.equinox.p2.publisher.ProductPublisher, org.eclipse.equinox.p2.publisher.FeaturesAndBundlesPublisher, org.eclipse.equinox.p2.reconciler.application, org.eclipse.equinox.p2.repository.repo2runnable, org.eclipse.equinox.p2.repository.metadataverifier, org.eclipse.equinox.p2.artifact.repository.mirrorApplication, org.eclipse.equinox.p2.metadata.repository.mirrorApplication, org.eclipse.equinox.p2.touchpoint.natives.nativePackageExtractor, org.eclipse.equinox.p2.updatesite.UpdateSitePublisher, org.eclipse.equinox.p2.publisher.UpdateSitePublisher, org.eclipse.equinox.p2.publisher.CategoryPublisher, org.eclipse.help.base.infocenterApplication, org.eclipse.help.base.helpApplication, org.eclipse.help.base.indexTool, org.eclipse.ui.ide.workbench.
+	at org.eclipse.equinox.internal.app.EclipseAppContainer.startDefaultApp(EclipseAppContainer.java:264)
+	at org.eclipse.equinox.internal.app.MainApplicationLauncher.run(MainApplicationLauncher.java:34)
+	at org.eclipse.core.runtime.internal.adaptor.EclipseAppLauncher.runApplication(EclipseAppLauncher.java:143)
+	at org.eclipse.core.runtime.internal.adaptor.EclipseAppLauncher.start(EclipseAppLauncher.java:109)
+	at org.eclipse.core.runtime.adaptor.EclipseStarter.run(EclipseStarter.java:439)
+	at org.eclipse.core.runtime.adaptor.EclipseStarter.run(EclipseStarter.java:271)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.eclipse.equinox.launcher.Main.invokeFramework(Main.java:668)
+	at org.eclipse.equinox.launcher.Main.basicRun(Main.java:605)
+	at org.eclipse.equinox.launcher.Main.run(Main.java:1481)
