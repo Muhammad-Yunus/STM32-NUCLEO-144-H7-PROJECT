@@ -7,24 +7,19 @@ This project brings up a **3.5" ST7796 TFT LCD** with **XPT2046 resistive touch*
 Features:
 - ST7796 LCD driver with 16-bit FMC interface
 - LVGL v9 integration with music demo
-- Optimized 27-28 FPS performance
+- Optimized ~54 FPS performance
 - Touch driver with calibration support
-- 240 MHz system clock with I/D-Cache enabled
+- 480 MHz system clock with I/D-Cache enabled
 
 Target board: **STM32H753ZI (NUCLEO-144)**
 
-<br>
-
-![](../Doc/thumb_lvgl_2.jpeg)
-
-<br><br>
 ---
 
 ## 2) Hardware Requirements
 
 | Component | Description |
 |-----------|-------------|
-| MCU | STM32H753ZI (240 MHz Cortex-M7) |
+| MCU | STM32H753ZI (480 MHz Cortex-M7) |
 | LCD | 3.5" ST7796 16-bit parallel TFT |
 | Touch | XPT2046 resistive touch controller |
 | Interface | FMC/FSMC 16-bit parallel bus |
@@ -162,7 +157,7 @@ STM32_Programmer_CLI.exe -c port=SWD -w Debug/ST7796_16BIT_NUCLEO_H753ZI.elf -v 
 | Large Buffers | 120-line double buffering | Fewer flushes per frame |
 | Fast Pixel Loop | Inline functions, aligned access | Minimal per-pixel overhead |
 | Aggressive Timing | 29ns write cycle | Stable at 480 MHz |
-| LVGL Optimization | Reduced logging, fast refresh | 48 FPS achieved |
+| LVGL Optimization | Reduced logging, fast refresh | ~54 FPS achieved |
 
 ### 7.2 Clock Configuration
 - System Clock: **480 MHz** (PLL from HSE via ST-LINK MCO 8 MHz)
@@ -221,7 +216,7 @@ ST7796_16BIT_NUCLEO_H753ZI/
 | Pixel Cycle | ~29 ns |
 | Theoretical Max | ~60+ FPS (scaling with clock) |
 
-The 48 FPS was achieved with 480 MHz system clock, 240 MHz HCLK, and optimized FMC timing.
+The 54 FPS was achieved with 480 MHz system clock, 240 MHz HCLK, and optimized FMC timing.
 
 ---
 
