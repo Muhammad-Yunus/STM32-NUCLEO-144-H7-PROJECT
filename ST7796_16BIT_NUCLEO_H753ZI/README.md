@@ -12,7 +12,7 @@ Features:
 - 480 MHz system clock with I/D-Cache enabled
 
 Target board: **STM32H753ZI (NUCLEO-144)**
-
+![](../Doc/thumb_lvgl_2.jpeg)
 ---
 
 ## 2) Hardware Requirements
