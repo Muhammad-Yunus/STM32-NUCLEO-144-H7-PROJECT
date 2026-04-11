@@ -97,19 +97,40 @@ void TP_Adjust(void)
                     TP_Draw_Touch_Point(lcddev.width - CAL_MARGIN, lcddev.height - CAL_MARGIN, RED);
                     break;
                 case 4:
-                    /* Calculate calibration factors */
-                    tem1 = abs(pos_temp[0][0] - pos_temp[1][0]);
-                    tem2 = abs(pos_temp[2][0] - pos_temp[3][0]);
-                    fac  = (float)(lcddev.width  - 2 * CAL_MARGIN) / ((tem1 + tem2) / 2.0f);
-                    tp_dev.xfac = fac;
+                    /* Calculate calibration factors using two-point form */
+                    uint32_t raw_x_left  = (pos_temp[0][0] + pos_temp[2][0]) / 2;
+                    uint32_t raw_x_right = (pos_temp[1][0] + pos_temp[3][0]) / 2;
+                    uint32_t raw_y_top   = (pos_temp[0][1] + pos_temp[1][1]) / 2;
+                    uint32_t raw_y_bottom= (pos_temp[2][1] + pos_temp[3][1]) / 2;
 
-                    tem1 = abs(pos_temp[0][1] - pos_temp[2][1]);
-                    tem2 = abs(pos_temp[1][1] - pos_temp[3][1]);
-                    fac  = (float)lcddev.height / ((tem1 + tem2) / 2.0f);
-                    tp_dev.yfac = -fac; /* Negate for inverted Y-axis */
+                    float target_x_span = (float)(lcddev.width  - 2 * CAL_MARGIN);
+                    float target_y_span = (float)(lcddev.height - 2 * CAL_MARGIN);
 
-                    tp_dev.xoff = (short)(CAL_MARGIN - tp_dev.xfac * ((pos_temp[0][0] + pos_temp[2][0]) / 2));
-                    tp_dev.yoff = (short)(CAL_MARGIN - tp_dev.yfac * ((pos_temp[0][1] + pos_temp[1][1]) / 2));
+                    float raw_x_span = (float)((int32_t)raw_x_right - (int32_t)raw_x_left);
+                    float raw_y_span = (float)((int32_t)raw_y_bottom - (int32_t)raw_y_top);
+
+                    if (fabsf(raw_x_span) < 0.01f || fabsf(raw_y_span) < 0.01f)
+                    {
+                        cnt = 0;
+                        LCD_Clear(WHITE);
+                        TP_Draw_Touch_Point(CAL_MARGIN, CAL_MARGIN, RED);
+                        GUI_ShowString(lcddev.width / 2 - 90, lcddev.height / 2 - 20,
+                                       (uint8_t *)"Calibration failed!", RED);
+                        GUI_ShowString(lcddev.width / 2 - 90, lcddev.height / 2,
+                                       (uint8_t *)"Retry...", RED);
+                        HAL_Delay(1000);
+                        LCD_Clear(WHITE);
+                        TP_Draw_Touch_Point(CAL_MARGIN, CAL_MARGIN, RED);
+                        break;
+                    }
+
+                    tp_dev.xfac = target_x_span / raw_x_span;
+                    tp_dev.yfac = target_y_span / raw_y_span;
+
+                    tp_dev.xoff = (short)(CAL_MARGIN - tp_dev.xfac * raw_x_left);
+                    tp_dev.yoff = (short)(CAL_MARGIN - tp_dev.yfac * raw_y_top);
+
+                    /* Verify diagonal consistency */
 
                     /* Verify diagonal consistency */
                     d1 = abs(pos_temp[0][0] - pos_temp[3][0]);
@@ -139,7 +160,23 @@ void TP_Adjust(void)
                     {
                         GUI_ShowString(lcddev.width / 2 - 70, lcddev.height / 2,
                                        (uint8_t *)"Calibration OK!", BLUE);
-                        HAL_Delay(1000);
+                        GUI_ShowString(lcddev.width / 2 - 70, lcddev.height / 2 + 20,
+                                       (uint8_t *)"xfac : ", BLUE);
+                        GUI_ShowFloatNum(lcddev.width / 2, lcddev.height / 2 + 20,
+                                         tp_dev.xfac, 3, BLUE);
+                        GUI_ShowString(lcddev.width / 2 - 70, lcddev.height / 2 + 40,
+                                       (uint8_t *)"yfac : ", BLUE);
+                        GUI_ShowFloatNum(lcddev.width / 2, lcddev.height / 2 + 40,
+                                         tp_dev.yfac, 3, BLUE);
+                        GUI_ShowString(lcddev.width / 2 - 70, lcddev.height / 2 + 60,
+                                       (uint8_t *)"xoff : ", BLUE);
+                        GUI_ShowIntNum(lcddev.width / 2, lcddev.height / 2 + 60,
+                                       (int32_t)tp_dev.xoff, 6, BLUE);
+                        GUI_ShowString(lcddev.width / 2 - 70, lcddev.height / 2 + 80,
+                                       (uint8_t *)"yoff : ", BLUE);
+                        GUI_ShowIntNum(lcddev.width / 2, lcddev.height / 2 + 80,
+                                       (int32_t)tp_dev.yoff, 6, BLUE);
+                        HAL_Delay(10000);
                         LCD_Clear(WHITE);
                         return;
                     }
@@ -150,7 +187,7 @@ void TP_Adjust(void)
         }
         HAL_Delay(10);
         outtime++;
-        if (outtime > 1000)   /* 10 s timeout → restart */
+        if (outtime > 1000)   /* 10 s timeout → restart */
         {
             outtime = 0;
             cnt = 0;

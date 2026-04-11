@@ -16,6 +16,7 @@
 /* USER CODE BEGIN Includes */
 #include "lcd.h"
 #include "touch.h"
+#include "gui_demo.h"
 
 #include "lvgl.h"
 #include "demos/lv_demos.h"
@@ -105,6 +106,9 @@ int main(void)
   /* Clear screen to verify LCD works */
   LCD_Clear(BLACK);
   HAL_Delay(500);
+
+  /* Calibrate LCD*/
+  touch_calib_demo();
 
   /* Initialize LVGL */
   lv_init();

@@ -248,4 +248,7 @@ void TP_SetOrientation(uint8_t orientation)
         CMD_RDX = XPT2046_CMD_Y;
         CMD_RDY = XPT2046_CMD_X;
     }
+
+    /* Raw X/Y are already aligned by CMD_RDX/CMD_RDY swap above */
+    tp_dev.touchtype = 0;
 }
