@@ -165,7 +165,7 @@ STM32_Programmer_CLI.exe -c port=SWD -w Debug/ST7796_16BIT_NUCLEO_H753ZI.elf -v 
 | Large Buffers | 120-line double buffering | Fewer flushes per frame |
 | Fast Pixel Loop | Inline functions, aligned access | Minimal per-pixel overhead |
 | Aggressive Timing | 29ns write cycle | Stable at 480 MHz |
-| LVGL Optimization | Reduced logging, fast refresh | 48 FPS achieved |
+| LVGL Optimization | Reduced logging, fast refresh | 54 FPS achieved |
 
 ### 7.2 Clock Configuration
 - System Clock: **480 MHz** (PLL from HSE via ST-LINK MCO 8 MHz)
