@@ -117,9 +117,16 @@ git checkout v9.2.1  # or latest v9.x release
    - `Middlewares/lvgl`
    - `Middlewares/lvgl/src`
 
-2. **Preprocessor Defines**: Ensure `LV_CONF_INCLUDE_SIMPLE` is NOT defined
+2. **Include Paths**: Add to C/C++ General → Path and Symbols → Includes → GNU C:
+   - `Middlewares/lvgl`
+   - `Middlewares/lvgl/src`
+  
+3. **Include Paths**: Add to C/C++ General → Path and Symbols → Source Location:
+   - `Middlewares/lvgl`
+     
+4. **Preprocessor Defines**: Ensure `LV_CONF_INCLUDE_SIMPLE` is NOT defined
 
-3. **Linker**: Verify `RAM_D2` section exists in linker script
+5. **Linker**: Verify `RAM_D2` section exists in linker script
 
 ---
 
