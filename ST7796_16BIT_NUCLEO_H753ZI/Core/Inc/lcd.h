@@ -32,9 +32,9 @@
  *   RST        -->  PA8                (GPIO Output, active LOW)
  *   BL         -->  PA9                (GPIO Output, active HIGH)
  * TOUCH (XPT2046) & SD CARD :
- *   SCK        -->  PA5                (SPI1_SCK)
- *   MISO       -->  PA6                (SPI1_MISO)
- *   MOSI       -->  PA7                (SPI1_MOSI)
+ *   SCK        -->  PB3                (SPI1_SCK)
+ *   MISO       -->  PB4                (SPI1_MISO)
+ *   MOSI       -->  PB5                (SPI1_MOSI)
  *   T_PEN      -->  PG9                (GPIO Input, active LOW)
  *   T_CS       -->  PB6                (GPIO Output)
  *   SD_CS      -->  PB14               (GPIO Output)
