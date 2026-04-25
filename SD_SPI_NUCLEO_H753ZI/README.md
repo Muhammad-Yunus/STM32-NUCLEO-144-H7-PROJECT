@@ -35,12 +35,6 @@ Done.
 - `SPI1_MOSI` -> **PB5**
 - `SD_CS`     -> **PE14** (Arduino D4)
 
-### Other chip-select lines kept high
-
-- `TFT_CS` -> **PB14** (Arduino D10)
-- `LCD_CS` -> **PD7**
-
-> During SD bring-up, keep non-SD SPI slaves deselected.
 
 ## 3) Wiring Guide (Dedicated SD Module)
 
