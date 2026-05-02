@@ -225,6 +225,8 @@ static uint8_t WAV_HasExt(const char *name)
 
 static uint8_t WAV_OpenAndValidate(const char *name)
 {
+  f_close(&g_wav_file);
+
   /* Read enough to cover typical metadata chunks before 'data' */
   uint8_t header[4096];
   UINT br = 0U;
