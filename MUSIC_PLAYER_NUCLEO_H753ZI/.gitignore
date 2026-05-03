@@ -1,0 +1,31 @@
+# STM32CubeIDE / STM32CubeMX
+
+# Build output folders
+Debug/
+Release/
+
+# Common binary/map artifacts
+*.elf
+*.bin
+*.hex
+*.map
+*.list
+
+# Temporary/log files
+*.log
+*.tmp
+
+# Eclipse/CubeIDE workspace-local metadata
+.metadata/
+
+# Optional local launch configs (uncomment if you don't want to track them)
+# *.launch
+
+# Keep these tracked in this project:
+# - .project
+# - .cproject
+# - .mxproject
+# - .settings/
+# - *.ioc
+# - *_FLASH.ld / *_RAM.ld
+# - Core/ and Drivers/ sources
