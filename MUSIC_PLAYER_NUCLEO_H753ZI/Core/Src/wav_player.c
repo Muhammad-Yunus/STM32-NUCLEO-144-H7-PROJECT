@@ -1,9 +1,24 @@
 #include "wav_player.h"
 #include "audio_config.h"
-#include "audio_synth.h"
 #include "ff.h"
 #include <stdio.h>
 #include "main.h"
+
+/* Set to 1 to enable runtime WAV debug/status logs over serial */
+#define WAV_LOG_ENABLED 0
+
+#if WAV_LOG_ENABLED
+#define WAV_LOG(...) printf(__VA_ARGS__)
+#else
+#define WAV_LOG(...) ((void)0)
+#endif
+
+static inline int16_t Sat16(int32_t v)
+{
+  if (v > 32767) return 32767;
+  if (v < -32768) return -32768;
+  return (int16_t)v;
+}
 
 #define WAV_RING_FRAMES 8192U
 #define WAV_RING_MASK (WAV_RING_FRAMES - 1U)
@@ -15,7 +30,6 @@ static uint32_t g_wav_bytes_played = 0U;
 static uint8_t g_wav_mono = 0U;
 static uint32_t g_wav_sample_rate = 0U;
 static char g_wav_current_name[64];
-static uint8_t g_wav_dump = 1U;
 
 static int16_t g_ring_l[WAV_RING_FRAMES];
 static int16_t g_ring_r[WAV_RING_FRAMES];
@@ -25,8 +39,12 @@ static volatile uint32_t g_ring_count = 0U;
 static volatile uint32_t g_wav_underruns = 0U;
 
 static uint8_t g_io_buf[WAV_IO_CHUNK_BYTES];
-static uint32_t g_wav_last_log_ms = 0U;
 static uint32_t g_wav_read_errors = 0U;
+
+#if WAV_LOG_ENABLED
+static uint32_t g_wav_last_log_ms = 0U;
+static uint8_t g_wav_dump = 1U;
+#endif
 
 static uint32_t WAV_ReadLE32(const uint8_t *p)
 {
@@ -99,9 +117,11 @@ uint8_t WavPlayer_Open(const char *name)
 
   while (pos + 8U < (uint32_t)br) {
     uint32_t chunk_size = WAV_ReadLE32(&header[pos + 4U]);
+#if WAV_LOG_ENABLED
     if (g_wav_dump) {
-      printf("CHK %.4s @%lu size=%lu\r\n", &header[pos], pos, chunk_size);
+      WAV_LOG("CHK %.4s @%lu size=%lu\r\n", &header[pos], pos, chunk_size);
     }
+#endif
     if ((header[pos] == 'f') && (header[pos + 1U] == 'm') && (header[pos + 2U] == 't') && (header[pos + 3U] == ' ')) {
       if (chunk_size >= 16U) {
         uint16_t audio_fmt = WAV_ReadLE16(&header[pos + 8U]);
@@ -138,7 +158,9 @@ uint8_t WavPlayer_Open(const char *name)
   g_ring_wr = g_ring_rd = g_ring_count = 0U;
   g_wav_underruns = 0U;
   g_wav_read_errors = 0U;
+#if WAV_LOG_ENABLED
   g_wav_last_log_ms = HAL_GetTick();
+#endif
 
   uint32_t ni = 0U;
   while ((name[ni] != 0) && (ni < sizeof(g_wav_current_name) - 1U)) {
@@ -147,8 +169,10 @@ uint8_t WavPlayer_Open(const char *name)
   }
   g_wav_current_name[ni] = 0;
 
-  printf("Playing WAV: %s (sr=%lu, ch=%u, data_ofs=%lu)\r\n", name, sample_rate, channels, data_offset);
+  WAV_LOG("Playing WAV: %s (sr=%lu, ch=%u, data_ofs=%lu)\r\n", name, sample_rate, channels, data_offset);
+#if WAV_LOG_ENABLED
   g_wav_dump = 0U;
+#endif
   return 1U;
 }
 
@@ -189,12 +213,14 @@ void WavPlayer_Pump(void)
     ring_push(l, r);
   }
 
+#if WAV_LOG_ENABLED
   uint32_t now = HAL_GetTick();
   if ((now - g_wav_last_log_ms) >= 1000U) {
-    printf("WAVSTAT ring=%lu played=%lu/%lu underrun=%lu err=%lu\r\n",
+    WAV_LOG("WAVSTAT ring=%lu played=%lu/%lu underrun=%lu err=%lu\r\n",
            g_ring_count, g_wav_bytes_played, g_wav_data_size, g_wav_underruns, g_wav_read_errors);
     g_wav_last_log_ms = now;
   }
+#endif
 }
 
 void WavPlayer_FillFrames(int16_t *buffer, uint16_t start_frame, uint16_t frame_count, float volume_gain)
@@ -207,8 +233,8 @@ void WavPlayer_FillFrames(int16_t *buffer, uint16_t start_frame, uint16_t frame_
       g_wav_underruns++;
     }
     float gain = WAV_AMPLITUDE * volume_gain;
-    buffer[frame * 2U] = AudioSynth_Sat16((int32_t)((float)l * gain));
-    buffer[frame * 2U + 1U] = AudioSynth_Sat16((int32_t)((float)r * gain));
+    buffer[frame * 2U] = Sat16((int32_t)((float)l * gain));
+    buffer[frame * 2U + 1U] = Sat16((int32_t)((float)r * gain));
   }
 }
 

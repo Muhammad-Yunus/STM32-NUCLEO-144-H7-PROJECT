@@ -7,12 +7,6 @@ static ADC_HandleTypeDef *touch_hadc;
 #define TOUCH_RAW_VALID_MAX 4000U
 #define TOUCH_SETTLE_MS       1U
 
-static bool Touch_IsRawValid(uint16_t x, uint16_t y)
-{
-    return (x > TOUCH_RAW_VALID_MIN && x < TOUCH_RAW_VALID_MAX &&
-            y > TOUCH_RAW_VALID_MIN && y < TOUCH_RAW_VALID_MAX);
-}
-
 /* Internal GPIO/ADC Helper Macros */
 #define TOUCH_YD_HI()           HAL_GPIO_WritePin(TOUCH_YD_GPIO_Port, TOUCH_YD_Pin, GPIO_PIN_SET)
 #define TOUCH_YD_LO()           HAL_GPIO_WritePin(TOUCH_YD_GPIO_Port, TOUCH_YD_Pin, GPIO_PIN_RESET)

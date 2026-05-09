@@ -21,19 +21,11 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
 #include "ff.h"
-#include "diskio.h"
-#include "sd_spi.h"
-#include "audio_config.h"
-#include "audio_synth.h"
-#include "wav_player.h"
-#include "playlist.h"
-#include "ili9341.h"
-#include "gui_manager.h"
+#include "simple_gfx.h"
 #include "touch_4wire.h"
+#include "lcd_spi_port.h"
+#include "player_app.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -43,12 +35,6 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define LCD_WIDTH               320
-#define LCD_HEIGHT              240
-#define LCD_FB_BYTE_PER_PIXEL   2
-#define LCD_VIRTUAL_BUF_SIZE    (LCD_WIDTH * 40)
-#define GUI_ONLY_MODE           0U
-#define GUI_ONLY_SW_TICK_MS     5U
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -68,66 +54,17 @@ TIM_HandleTypeDef htim6;
 
 /* USER CODE BEGIN PV */
 static FATFS g_fs;
-static uint8_t g_sd_test_done = 0;
-static int16_t audio_buffer[AUDIO_FRAMES * 2U];
-static uint8_t g_wav_mode = 0U;  /* 0=melody, 1=WAV */
-static uint8_t g_audio_paused = 0U;
-static float g_audio_phase = 0.0f;
-static float g_audio_phase_inc = 0.0f;
-static volatile uint16_t g_volume_percent = 10U;
-static uint8_t g_shuffle_enabled = 0U;
-static uint8_t g_viz_levels[14] = {0};
-static uint32_t g_viz_lfsr = 0xA5A5F00DU;
-static uint8_t Viz_NextRand(uint8_t min_v, uint8_t max_v)
-{
-  g_viz_lfsr ^= g_viz_lfsr << 13;
-  g_viz_lfsr ^= g_viz_lfsr >> 17;
-  g_viz_lfsr ^= g_viz_lfsr << 5;
-  uint8_t span = (uint8_t)(max_v - min_v + 1U);
-  return (uint8_t)(min_v + (g_viz_lfsr % span));
-}
-
-static void Viz_UpdateSyntheticLevels(void)
-{
-  if (g_wav_mode == 0U) {
-    for (uint8_t i = 0; i < 14U; i++) {
-      g_viz_levels[i] = Viz_NextRand(1U, 3U);
-    }
-  } else {
-    for (uint8_t i = 0; i < 14U; i++) {
-      g_viz_levels[i] = Viz_NextRand(2U, 6U);
-    }
-  }
-  GuiManager_SetSpectrumLevels(g_viz_levels, 14U);
-}
-
-static void Viz_UpdateFromAudioHalf(uint32_t base)
-{
-  (void)base;
-}
-
-static void Viz_UpdateFromAudioFull(uint32_t base)
-{
-  (void)base;
-}
-
-/* Align to 32 bytes for D-Cache / DMA coherency */
-static volatile uint32_t s_flush_count = 0U;
-static uint8_t s_lcd_heartbeat_done = 0U;
-static volatile uint8_t g_bl_pct = 100U;
 static volatile uint8_t g_bl_tick_100 = 0U;
 static volatile uint8_t g_bl_div4 = 0U;
-volatile uint32_t g_mcp_test_var = 0x1234ABCDU;
 static touch_calibration_t g_touch_cal = {
-  .x_min = 300,
-  .x_max = 3800,
-  .y_min = 300,
-  .y_max = 3800,
+  .x_min    = 215,
+  .x_max    = 2750,
+  .y_min    = 410,
+  .y_max    = 3815,
   .invert_x = false,
   .invert_y = false,
-  .swap_xy = false,
+  .swap_xy  = true,
 };
-static uint8_t g_touch_calibrating = 0U;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -135,21 +72,9 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_SPI1_Init(void);
-static void MX_ADC1_Init(void);
 static void MX_SAI1_Init(void);
 static void MX_TIM6_Init(void);
 /* USER CODE BEGIN PFP */
-static void AudioApp_FillFrames(uint16_t start_frame, uint16_t frame_count);
-static void LCD_Init(void);
-static void SPI1_SendBlocking(const uint8_t *data, uint32_t len);
-static void LCD_HeartbeatFill(uint16_t color);
-static void TouchCal_ApplyDefaults(void);
-static void RefreshPlaylistFromSD(void);
-
-void LCD_WriteCmd(uint8_t cmd);
-void LCD_WriteData(uint8_t data);
-void LCD_WriteMultiData(uint8_t *data, size_t length);
-
 void HAL_SAI_TxHalfCpltCallback(SAI_HandleTypeDef *hsai);
 void HAL_SAI_TxCpltCallback(SAI_HandleTypeDef *hsai);
 /* USER CODE END PFP */
@@ -157,186 +82,9 @@ void HAL_SAI_TxCpltCallback(SAI_HandleTypeDef *hsai);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-static void AudioApp_FillFrames(uint16_t start_frame, uint16_t frame_count)
-{
-  if (g_audio_paused) {
-    for (uint16_t i = 0; i < frame_count; i++) {
-      uint16_t frame = (uint16_t)(start_frame + i);
-      audio_buffer[frame * 2U] = 0;
-      audio_buffer[frame * 2U + 1U] = 0;
-    }
-    return;
-  }
-  float volume_gain = ((float)g_volume_percent / 100.0f) * 1.8f;
-#if (AUDIO_OUTPUT_MODE == AUDIO_MODE_TEST)
-  for (uint16_t i = 0; i < frame_count; i++) {
-    float sample = AUDIO_AMPLITUDE * sinf(g_audio_phase) * volume_gain;
-    int16_t s = AudioSynth_Sat16((int32_t)(sample * 32767.0f));
-    uint16_t frame = (uint16_t)(start_frame + i);
-    audio_buffer[frame * 2U] = s;
-    audio_buffer[frame * 2U + 1U] = s;
-    g_audio_phase += g_audio_phase_inc;
-    if (g_audio_phase >= (2.0f * AUDIO_PI)) {
-      g_audio_phase -= (2.0f * AUDIO_PI);
-    }
-  }
-#else
-  if (g_wav_mode == 0U) {
-    AudioSynth_FillFrames(audio_buffer, start_frame, frame_count);
-    for (uint16_t i = 0; i < frame_count; i++) {
-      uint16_t frame = (uint16_t)(start_frame + i);
-      audio_buffer[frame * 2U] = AudioSynth_Sat16((int32_t)((float)audio_buffer[frame * 2U] * volume_gain));
-      audio_buffer[frame * 2U + 1U] = AudioSynth_Sat16((int32_t)((float)audio_buffer[frame * 2U + 1U] * volume_gain));
-    }
-  } else {
-    if (WavPlayer_IsFinished()) {
-      if (!Playlist_PlayNext()) {
-        g_wav_mode = 0U;
-        AudioSynth_StartMelody();
-        AudioSynth_FillFrames(audio_buffer, start_frame, frame_count);
-        for (uint16_t i = 0; i < frame_count; i++) {
-          uint16_t frame = (uint16_t)(start_frame + i);
-          audio_buffer[frame * 2U] = AudioSynth_Sat16((int32_t)((float)audio_buffer[frame * 2U] * volume_gain));
-          audio_buffer[frame * 2U + 1U] = AudioSynth_Sat16((int32_t)((float)audio_buffer[frame * 2U + 1U] * volume_gain));
-        }
-        return;
-      }
-    }
-    WavPlayer_FillFrames(audio_buffer, start_frame, frame_count, volume_gain);
-  }
-#endif
-}
-
-void LCD_WriteCmd_NoCS(uint8_t cmd)
-{
-  HAL_GPIO_WritePin(LCD_DC_GPIO_Port, LCD_DC_Pin, GPIO_PIN_RESET);
-  SPI1_SendBlocking(&cmd, 1);
-}
-
-void LCD_WriteMultiData_NoCS(const uint8_t *data, size_t length)
-{
-  HAL_GPIO_WritePin(LCD_DC_GPIO_Port, LCD_DC_Pin, GPIO_PIN_SET);
-  SPI1_SendBlocking(data, (uint32_t)length);
-}
-
-void LCD_SetAddressWindow(int32_t x1, int32_t y1, int32_t x2, int32_t y2)
-{
-  uint8_t data[4];
-
-  LCD_WriteCmd(ILI9341_CMD_COLADDR);
-  data[0] = (uint8_t)((x1 >> 8) & 0xFF);
-  data[1] = (uint8_t)(x1 & 0xFF);
-  data[2] = (uint8_t)((x2 >> 8) & 0xFF);
-  data[3] = (uint8_t)(x2 & 0xFF);
-  LCD_WriteMultiData(data, 4);
-
-  LCD_WriteCmd(ILI9341_CMD_PAGEADDR);
-  data[0] = (uint8_t)((y1 >> 8) & 0xFF);
-  data[1] = (uint8_t)(y1 & 0xFF);
-  data[2] = (uint8_t)((y2 >> 8) & 0xFF);
-  data[3] = (uint8_t)(y2 & 0xFF);
-  LCD_WriteMultiData(data, 4);
-
-  LCD_WriteCmd(ILI9341_CMD_GRAM);
-  HAL_GPIO_WritePin(LCD_DC_GPIO_Port, LCD_DC_Pin, GPIO_PIN_SET);
-}
-
-void LCD_WritePixelsBlocking(const uint8_t *data, uint32_t len)
-{
-  HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_RESET);
-  SPI1_SendBlocking(data, len);
-  HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_SET);
-}
-
 void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
 {
-  /* Not used in blocking mode */
-}
-
-static void SPI1_SendBlocking(const uint8_t *data, uint32_t len);
-static void LCD_HeartbeatFill(uint16_t color);
-static void TouchCal_ApplyDefaults(void)
-{
-  /* Precise measured points:
-     TL(0,0):   x=440,  y=250
-     TR(320,0): x=410,  y=2750
-     BL(0,240): x=3795, y=215
-     BR(320,240):x=3815,y=2740
-  */
-  g_touch_cal.x_min = 215;
-  g_touch_cal.x_max = 2750;
-  g_touch_cal.y_min = 410;
-  g_touch_cal.y_max = 3815;
-  g_touch_cal.invert_x = false;
-  g_touch_cal.invert_y = false;
-  g_touch_cal.swap_xy = true;
-  printf("CAL: Applied precise measured defaults\r\n");
-}
-
-static void LCD_Init(void)
-{
-  /* Ensure SPI is at a safe speed for init */
-  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16;
-  HAL_SPI_Init(&hspi1);
-
-  HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_RESET);
-
-  /* Hardware reset if possible, otherwise software reset */
-  LCD_WriteCmd(ILI9341_CMD_RST);
-  HAL_Delay(120);
-
-  ILI9341_Init(LCD_WriteData, LCD_WriteCmd);
-
-  LCD_WriteCmd(ILI9341_CMD_MAC);
-  LCD_WriteData(0x28); /* Landscape */
-
-  LCD_WriteCmd(ILI9341_CMD_PIXELFORMAT);
-  LCD_WriteData(0x55); /* 16-bit */
-
-  LCD_WriteCmd(ILI9341_CMD_SLEEPOUT);
-  HAL_Delay(120);
-
-  LCD_WriteCmd(ILI9341_CMD_DISPLAYON);
-  HAL_Delay(20);
-
-
-  HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_SET);
-}
-
-static void LCD_HeartbeatFill(uint16_t color)
-{
-  uint8_t data[4];
-  LCD_WriteCmd(ILI9341_CMD_COLADDR);
-  data[0] = 0; data[1] = 0; data[2] = (LCD_WIDTH - 1) >> 8; data[3] = (LCD_WIDTH - 1) & 0xFF;
-  LCD_WriteMultiData(data, 4);
-
-  LCD_WriteCmd(ILI9341_CMD_PAGEADDR);
-  data[0] = 0; data[1] = 0; data[2] = (LCD_HEIGHT - 1) >> 8; data[3] = (LCD_HEIGHT - 1) & 0xFF;
-  LCD_WriteMultiData(data, 4);
-
-  LCD_WriteCmd(ILI9341_CMD_GRAM);
-  HAL_GPIO_WritePin(LCD_DC_GPIO_Port, LCD_DC_Pin, GPIO_PIN_SET);
-  HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_RESET);
-
-  uint8_t px[2] = {(uint8_t)(color >> 8), (uint8_t)(color & 0xFF)};
-  for (uint32_t i = 0; i < (LCD_WIDTH * LCD_HEIGHT); i++) {
-    SPI1_SendBlocking(px, 2);
-  }
-
-  HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_SET);
-}
-
-static void RefreshPlaylistFromSD(void)
-{
-  if (!Playlist_Init()) {
-    return;
-  }
-
-  GuiManager_ClearPlaylist();
-  uint16_t count = Playlist_GetCount();
-  for (uint16_t i = 0; i < count; i++) {
-    GuiManager_AddTrackToList(Playlist_GetNameByIndex(i));
-  }
+  (void)hspi;
 }
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
@@ -345,191 +93,22 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     g_bl_div4 = (uint8_t)((g_bl_div4 + 1U) & 0x03U);
     if (g_bl_div4 == 0U) {
       g_bl_tick_100 = (uint8_t)((g_bl_tick_100 + 1U) % 100U);
-      HAL_GPIO_WritePin(GPIOG, GPIO_PIN_12, (g_bl_tick_100 < g_bl_pct) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+      HAL_GPIO_WritePin(GPIOG, GPIO_PIN_12, (g_bl_tick_100 < PlayerApp_GetBacklightPercent()) ? GPIO_PIN_SET : GPIO_PIN_RESET);
     }
   }
-}
-
-/* LCD Low-level Support */
-static void SPI1_SendBlocking(const uint8_t *data, uint32_t len)
-{
-  HAL_SPI_Transmit(&hspi1, (uint8_t *)data, (uint16_t)len, 1000);
-}
-
-void LCD_WriteCmd(uint8_t cmd)
-{
-  HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_RESET);
-  HAL_GPIO_WritePin(LCD_DC_GPIO_Port, LCD_DC_Pin, GPIO_PIN_RESET);
-  SPI1_SendBlocking(&cmd, 1);
-}
-
-void LCD_WriteData(uint8_t data)
-{
-  HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_RESET);
-  HAL_GPIO_WritePin(LCD_DC_GPIO_Port, LCD_DC_Pin, GPIO_PIN_SET);
-  SPI1_SendBlocking(&data, 1);
-}
-
-void LCD_WriteMultiData(uint8_t *data, size_t length)
-{
-  HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_RESET);
-  HAL_GPIO_WritePin(LCD_DC_GPIO_Port, LCD_DC_Pin, GPIO_PIN_SET);
-  SPI1_SendBlocking(data, length);
-}
-
-/* UI Callbacks */
-void GuiManager_OnPlay(void)
-{
-  g_audio_paused = 0U;
-  g_wav_mode = 1U;
-  GuiManager_SetPlaying(1U);
-  printf("UI: Play\r\n");
-}
-
-void GuiManager_OnPause(void)
-{
-  g_audio_paused = 1U;
-  GuiManager_SetPlaying(0U);
-  printf("UI: Pause\r\n");
-}
-
-void GuiManager_OnStop(void)
-{
-  g_audio_paused = 1U;
-  g_wav_mode = 0U;
-  GuiManager_SetPlaying(0U);
-  printf("UI: Stop\r\n");
-}
-
-void GuiManager_OnShuffleToggle(void)
-{
-  g_shuffle_enabled = g_shuffle_enabled ? 0U : 1U;
-  GuiManager_SetShuffle(g_shuffle_enabled);
-  printf("UI: Shuffle %s\r\n", g_shuffle_enabled ? "ON" : "OFF");
-}
-
-void GuiManager_OnNext(void)
-{
-  uint8_t ok = 0U;
-  if (g_shuffle_enabled && Playlist_GetCount() > 0U) {
-    uint16_t count = Playlist_GetCount();
-    uint16_t start = (uint16_t)(rand() % count);
-    for (uint16_t i = 0; i < count; i++) {
-      uint16_t idx = (uint16_t)((start + i) % count);
-      const char *name = Playlist_GetNameByIndex(idx);
-      if (name != NULL && Playlist_PlaySpecific(name)) {
-        ok = 1U;
-        break;
-      }
-    }
-  } else {
-    ok = Playlist_PlayNextStrict();
-  }
-
-  if (ok) {
-    g_audio_paused = 0U;
-    g_wav_mode = 1U;
-    GuiManager_SetTrackName(WavPlayer_GetCurrentName());
-    GuiManager_SetCurrentTrackByName(WavPlayer_GetCurrentName());
-    GuiManager_SetPlaying(1U);
-  }
-  printf("UI: Next\r\n");
-}
-
-void GuiManager_OnPrev(void)
-{
-  uint8_t ok = 0U;
-  if (g_shuffle_enabled && Playlist_GetCount() > 0U) {
-    uint16_t count = Playlist_GetCount();
-    uint16_t start = (uint16_t)(rand() % count);
-    for (uint16_t i = 0; i < count; i++) {
-      uint16_t idx = (uint16_t)((start + i) % count);
-      const char *name = Playlist_GetNameByIndex(idx);
-      if (name != NULL && Playlist_PlaySpecific(name)) {
-        ok = 1U;
-        break;
-      }
-    }
-  } else {
-    ok = Playlist_PlayPrevStrict();
-  }
-
-  if (ok) {
-    g_audio_paused = 0U;
-    g_wav_mode = 1U;
-    GuiManager_SetTrackName(WavPlayer_GetCurrentName());
-    GuiManager_SetCurrentTrackByName(WavPlayer_GetCurrentName());
-    GuiManager_SetPlaying(1U);
-  }
-  printf("UI: Prev\r\n");
-}
-
-void GuiManager_OnTrackSelect(const char *name)
-{
-  static uint32_t last_select_ms = 0U;
-  if (name == NULL) {
-    return;
-  }
-
-  uint32_t now = HAL_GetTick();
-  if ((now - last_select_ms) < 250U) {
-    return;
-  }
-  last_select_ms = now;
-
-  const char *cur = WavPlayer_GetCurrentName();
-  if (cur != NULL && cur[0] != 0 && strcmp(cur, name) == 0) {
-    return;
-  }
-
-  if (Playlist_PlaySpecific(name)) {
-    g_wav_mode = 1U;
-    GuiManager_SetTrackName(WavPlayer_GetCurrentName());
-    GuiManager_SetCurrentTrackByName(WavPlayer_GetCurrentName());
-    GuiManager_SetPlaying(1U);
-    printf("UI: Selected %s\r\n", name);
-  }
-}
-
-void GuiManager_OnRefreshPlaylist(void)
-{
-  if (!g_sd_test_done) {
-    return;
-  }
-  RefreshPlaylistFromSD();
-  printf("UI: Playlist refreshed\r\n");
-}
-
-void GuiManager_OnBrightnessChange(uint8_t level)
-{
-  static const uint8_t lut[5] = {20U, 40U, 60U, 80U, 100U};
-  if (level > 4U) level = 4U;
-  g_bl_pct = lut[level];
-}
-
-void GuiManager_OnVolumeChange(uint16_t volume)
-{
-  if (volume > 100U) {
-    volume = 100U;
-  }
-  g_volume_percent = volume;
 }
 
 void HAL_SAI_TxHalfCpltCallback(SAI_HandleTypeDef *hsai)
 {
   if (hsai->Instance == SAI1_Block_A) {
-    AudioApp_FillFrames(0U, AUDIO_FRAMES / 2U);
-    Viz_UpdateFromAudioHalf(0U);
-    SCB_CleanDCache_by_Addr((uint32_t*)&audio_buffer[0], AUDIO_FRAMES * sizeof(int16_t));
+    PlayerApp_OnAudioHalfTransfer();
   }
 }
 
 void HAL_SAI_TxCpltCallback(SAI_HandleTypeDef *hsai)
 {
   if (hsai->Instance == SAI1_Block_A) {
-    AudioApp_FillFrames(AUDIO_FRAMES / 2U, AUDIO_FRAMES / 2U);
-    Viz_UpdateFromAudioFull(AUDIO_FRAMES);
-    SCB_CleanDCache_by_Addr((uint32_t*)&audio_buffer[AUDIO_FRAMES], AUDIO_FRAMES * sizeof(int16_t));
+    PlayerApp_OnAudioFullTransfer();
   }
 }
 /* USER CODE END 0 */
@@ -574,175 +153,39 @@ int main(void)
   }
 
   /* Direct UART Sanity Check */
-  HAL_UART_Transmit(&hcom_uart[COM1], (uint8_t *)"COM_OK\r\n", 8, 100);
+  HAL_UART_Transmit(&hcom_uart[COM1], (uint8_t *)"BOOT\r\n", 6, 100);
 
   /* Initialize all configured peripherals */
-  HAL_UART_Transmit(&hcom_uart[COM1], (uint8_t *)"MX_GPIO...\r\n", 12, 100);
   MX_GPIO_Init();
-  HAL_UART_Transmit(&hcom_uart[COM1], (uint8_t *)"MX_SPI...\r\n", 11, 100);
   MX_SPI1_Init();
 #ifdef HAL_ADC_MODULE_ENABLED
-  HAL_UART_Transmit(&hcom_uart[COM1], (uint8_t *)"MX_ADC...\r\n", 11, 100);
   MX_ADC1_Init();
 #endif
-  HAL_UART_Transmit(&hcom_uart[COM1], (uint8_t *)"MX_SAI...\r\n", 11, 100);
   MX_SAI1_Init();
-  HAL_UART_Transmit(&hcom_uart[COM1], (uint8_t *)"MX_TIM...\r\n", 11, 100);
   MX_TIM6_Init();
-  HAL_UART_Transmit(&hcom_uart[COM1], (uint8_t *)"MX_DONE\r\n", 9, 100);
   /* USER CODE BEGIN 2 */
   HAL_TIM_Base_Start_IT(&htim6);
 
-  LCD_Init();
+  LCD_SPI_Init(&hspi1);
   Touch4W_Init(&hadc1);
 
-  TouchCal_ApplyDefaults();
-  GuiManager_Init();
+  SimpleGFX_Init();
 
-  printf("Clock+COM up\r\n");
   HAL_Delay(20);
-  printf("Peripherals up\r\n");
-  printf("MCP Lifecycle Hook: build/flash OK\r\n");
   HAL_Delay(20);
 
   HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_SET);
   HAL_GPIO_WritePin(SD_CS_GPIO_Port, SD_CS_Pin, GPIO_PIN_SET);
   HAL_GPIO_WritePin(LCD_DC_GPIO_Port, LCD_DC_Pin, GPIO_PIN_RESET);
 
-  s_lcd_heartbeat_done = 1U;
-
-  printf("GUI Up\r\n");
-
-#if defined(GUI_ONLY_MODE) && (GUI_ONLY_MODE == 1U)
-  printf("GUI_ONLY_MODE: Bypassing SD and Audio init\r\n");
-  goto main_loop;
-#endif
-
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN 3 */
-  printf("\r\n--- STM32H7 Music Player ---\r\n");
+  PlayerApp_Init(&hsai_BlockA1, &hspi1, &g_fs, &g_touch_cal);
 
-  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_14, GPIO_PIN_SET);
-  HAL_Delay(20);
-
-  /* Force slow SPI for SD init */
-  hspi1.Instance->CFG1 &= ~SPI_CFG1_MBR;
-  hspi1.Instance->CFG1 |= SPI_BAUDRATEPRESCALER_64;
-
-  printf("before SD init\r\n");
-  HAL_Delay(10);
-
-  /* Initialize SD card */
-  if (SD_IO_Init()) {
-    printf("SD Init: OK\r\n");
-  } else {
-    printf("SD Init: FAILED\r\n");
-  }
-
-  printf("after SD init\r\n");
-  HAL_Delay(10);
-
-  /* Restore SPI to ~20MHz for LCD transfers */
-  hspi1.Instance->CFG1 &= ~SPI_CFG1_MBR;
-  hspi1.Instance->CFG1 |= SPI_BAUDRATEPRESCALER_16;
-
-  /* Mount Filesystem */
-  {
-    FRESULT fr = f_mount(&g_fs, "", 1);
-    if (fr == FR_OK) {
-      printf("Mount: OK\r\n");
-      g_sd_test_done = 1;
-    } else {
-      printf("Mount: FAILED (FR=%d)\r\n", (int)fr);
-    }
-  }
-
-  printf("after mount\r\n");
-  HAL_Delay(10);
-
-  /* Audio App Setup */
-  AudioSynth_Init();
-
-#if (AUDIO_OUTPUT_MODE == AUDIO_MODE_TEST)
-  g_wav_mode = 0U;
-  g_audio_phase = 0.0f;
-  g_audio_phase_inc = (2.0f * AUDIO_PI * AUDIO_TEST_FREQ_HZ) / AUDIO_SAMPLE_RATE;
-  AudioApp_FillFrames(0U, AUDIO_FRAMES);
-  printf("Mode: TEST (%.0f Hz sine)\r\n", AUDIO_TEST_FREQ_HZ);
-#else
-  if (Playlist_Init()) {
-    printf("Scanning SD card...\r\n");
-    RefreshPlaylistFromSD();
-    printf("Playlist count: %u\r\n", (unsigned)Playlist_GetCount());
-
-    if (Playlist_PlayNext()) {
-      g_wav_mode = 1U;
-    }
-
-    if (g_wav_mode == 1U) {
-      GuiManager_SetTrackName(WavPlayer_GetCurrentName());
-      GuiManager_SetCurrentTrackByName(WavPlayer_GetCurrentName());
-      GuiManager_SetPlaying(1U);
-    }
-  }
-
-  if (g_wav_mode == 0U) {
-    GuiManager_SetPlaying(0U);
-    printf("Fallback: MELODY\r\n");
-    AudioSynth_StartMelody();
-  }
-  AudioApp_FillFrames(0U, AUDIO_FRAMES);
-#endif
-
-  printf("before SAI DMA start\r\n");
-  HAL_Delay(10);
-
-  /* Start DMA Transmit */
-  if (HAL_SAI_Transmit_DMA(&hsai_BlockA1, (uint8_t *)audio_buffer, AUDIO_FRAMES * 2U) != HAL_OK) {
-    printf("SAI DMA: FAILED\r\n");
-    Error_Handler();
-  }
-
-  printf("Entering main loop\r\n");
-  HAL_Delay(10);
-
-main_loop:
   while (1)
   {
-    static uint32_t last_gui_update = 0;
-    static uint32_t last_viz_update = 0;
-    uint32_t now = HAL_GetTick();
-
-    uint16_t tx, ty;
-    if (Touch4W_GetCalibratedXY(&tx, &ty, &g_touch_cal, LCD_WIDTH, LCD_HEIGHT)) {
-        GuiManager_HandleTouch(tx, ty, 1);
-    } else {
-        GuiManager_HandleTouch(0, 0, 0);
-    }
-
-    if (g_touch_calibrating == 0U) {
-      if ((now - last_viz_update) >= 120U) {
-        last_viz_update = now;
-        if (!g_audio_paused) {
-          Viz_UpdateSyntheticLevels();
-        } else {
-          for (uint8_t i = 0; i < 14U; i++) {
-            g_viz_levels[i] = 0U;
-          }
-          GuiManager_SetSpectrumLevels(g_viz_levels, 14U);
-        }
-        GuiManager_RenderSpectrumOnly();
-      }
-      if ((now - last_gui_update) >= 180U) {
-        last_gui_update = now;
-        uint32_t elapsed = WavPlayer_GetElapsedSeconds();
-        GuiManager_SetPlaybackTime((uint16_t)(elapsed / 60U), (uint16_t)(elapsed % 60U));
-        GuiManager_Update();
-      }
-    }
-
-    WavPlayer_Pump();
+    PlayerApp_Tick(&g_touch_cal);
     HAL_Delay(5);
   }
   /* USER CODE END 3 */
