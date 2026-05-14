@@ -26,6 +26,8 @@
 #include "touch_4wire.h"
 #include "lcd_spi_port.h"
 #include "player_app.h"
+#include "SEGGER_RTT.h"
+#include "SEGGER_SYSVIEW.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -138,7 +140,10 @@ int main(void)
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
-
+  SEGGER_RTT_Init();
+  SEGGER_SYSVIEW_Conf();
+  SEGGER_SYSVIEW_Start();
+  SEGGER_RTT_WriteString(0, "RTT+SystemView init\r\n");
   /* USER CODE END SysInit */
 
   /* Initialize COM1 port (115200, 8 bits (7-bit data + 1 stop bit), no parity */

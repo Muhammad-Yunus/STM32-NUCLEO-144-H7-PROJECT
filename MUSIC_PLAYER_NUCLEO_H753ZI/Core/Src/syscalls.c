@@ -30,6 +30,7 @@
 #include <sys/time.h>
 #include <sys/times.h>
 #include "stm32h7xx_nucleo.h"
+#include "SEGGER_RTT.h"
 
 
 /* Variables */
@@ -82,7 +83,14 @@ __attribute__((weak)) int _read(int file, char *ptr, int len)
 __attribute__((weak)) int _write(int file, char *ptr, int len)
 {
   (void)file;
+  if (len <= 0) {
+    return len;
+  }
+#if defined(USE_RTT_STDOUT) && (USE_RTT_STDOUT == 1)
+  SEGGER_RTT_Write(0, ptr, (unsigned)len);
+#else
   HAL_UART_Transmit(&hcom_uart[COM1], (uint8_t *)ptr, (uint16_t)len, 0xFFFF);
+#endif
   return len;
 }
 

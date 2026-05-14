@@ -10,6 +10,9 @@
 #include "wav_player.h"
 #include "playlist.h"
 #include "simple_gfx.h"
+#include "SEGGER_RTT.h"
+
+#define APP_RTT_LOG(...) printf(__VA_ARGS__)
 
 #define LCD_WIDTH 320
 #define LCD_HEIGHT 240
@@ -26,6 +29,12 @@ static uint8_t s_shuffle_enabled = 0U;
 static uint8_t s_viz_levels[14] = {0};
 static uint32_t s_viz_lfsr = 0xA5A5F00DU;
 static volatile uint8_t s_bl_pct = 100U;
+
+static void App_LogNowPlaying(const char *tag)
+{
+  const char *name = WavPlayer_GetCurrentName();
+  APP_RTT_LOG("[%s] track=%s vol=%u paused=%u\r\n", tag, (name != NULL && name[0] != 0) ? name : "(none)", (unsigned)s_volume_percent, (unsigned)s_audio_paused);
+}
 
 static uint8_t Viz_NextRand(uint8_t min_v, uint8_t max_v)
 {
@@ -103,6 +112,7 @@ static void AudioApp_FillFrames(uint16_t start_frame, uint16_t frame_count)
     SimpleGFX_SetTrackName(WavPlayer_GetCurrentName());
     SimpleGFX_SetCurrentTrackByName(WavPlayer_GetCurrentName());
     SimpleGFX_SetPlaying(1U);
+    App_LogNowPlaying("AUTO_NEXT");
   }
 
   float volume_gain = ((float)s_volume_percent / 100.0f) * 1.8f;
@@ -112,21 +122,22 @@ static void AudioApp_FillFrames(uint16_t start_frame, uint16_t frame_count)
 static void PlayerApp_OnPlay(void)
 {
   s_audio_paused = 0U;
-  
   SimpleGFX_SetPlaying(1U);
+  App_LogNowPlaying("PLAY");
 }
 
 static void PlayerApp_OnPause(void)
 {
   s_audio_paused = 1U;
   SimpleGFX_SetPlaying(0U);
+  App_LogNowPlaying("PAUSE");
 }
 
 static void PlayerApp_OnStop(void)
 {
   s_audio_paused = 1U;
-  
   SimpleGFX_SetPlaying(0U);
+  App_LogNowPlaying("STOP");
 }
 
 static void PlayerApp_OnShuffleToggle(void)
@@ -155,10 +166,10 @@ static void PlayerApp_OnNext(void)
 
   if (ok) {
     s_audio_paused = 0U;
-    
     SimpleGFX_SetTrackName(WavPlayer_GetCurrentName());
     SimpleGFX_SetCurrentTrackByName(WavPlayer_GetCurrentName());
     SimpleGFX_SetPlaying(1U);
+    App_LogNowPlaying("NEXT");
   }
 }
 
@@ -182,10 +193,10 @@ static void PlayerApp_OnPrev(void)
 
   if (ok) {
     s_audio_paused = 0U;
-    
     SimpleGFX_SetTrackName(WavPlayer_GetCurrentName());
     SimpleGFX_SetCurrentTrackByName(WavPlayer_GetCurrentName());
     SimpleGFX_SetPlaying(1U);
+    App_LogNowPlaying("PREV");
   }
 }
 
@@ -208,10 +219,10 @@ static void PlayerApp_OnTrackSelect(const char *name)
   }
 
   if (Playlist_PlaySpecific(name)) {
-    
     SimpleGFX_SetTrackName(WavPlayer_GetCurrentName());
     SimpleGFX_SetCurrentTrackByName(WavPlayer_GetCurrentName());
     SimpleGFX_SetPlaying(1U);
+    App_LogNowPlaying("TRACK_SELECT");
   }
 }
 
@@ -236,6 +247,7 @@ static void PlayerApp_OnVolumeChange(uint16_t volume)
     volume = 100U;
   }
   s_volume_percent = volume;
+  APP_RTT_LOG("[VOLUME] vol=%u\r\n", (unsigned)s_volume_percent);
 }
 
 void PlayerApp_Init(SAI_HandleTypeDef *hsai,
