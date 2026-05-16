@@ -9,6 +9,8 @@ A real-time audio processing project using the **NUCLEO-H753ZI** to process inpu
 - **Optional DSP De-hiss**: Integrated HPF, LPF, and Noise Floor Suppressor to minimize background hiss.
 - **High-Fidelity 16 kHz Sampling**: Optimized sample rate for clear voice communication.
 
+![](../Doc/thumb_audio_echo.jpeg)
+
 ## 📌 Pin Configuration
 
 | Component | Function | Nucleo Pin | Notes |
